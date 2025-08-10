@@ -26,6 +26,7 @@ async function run() {
     const database = client.db("shopmate-DB");
     const userCollection = database.collection("user");
     const productCollection = database.collection("product");
+    const salesCollection = database.collection("sales");
 
     app.post("/users", async (req, res) => {
       try {
@@ -93,8 +94,61 @@ async function run() {
     });
 
     // sale data here 
+    app.post("/sales", async (req, res) => {
+      const session = client.startSession();
 
-    
+      try {
+        await session.withTransaction(async () => {
+          const newSale = req.body;
+
+          // Validate stock availability before processing
+          for (const item of newSale.products) {
+            const product = await productCollection.findOne(
+              { _id: new ObjectId(item.productId) },
+              { session }
+            );
+
+            if (!product) {
+              throw new Error(`Product ${item.name} not found`);
+            }
+
+            if (product.stock < item.quantity) {
+              throw new Error(`Insufficient stock for ${item.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
+            }
+          }
+
+          // Insert the sale
+          const saleResult = await salesCollection.insertOne(newSale, { session });
+
+          // Update product stock (decrease by sold quantity)
+          for (const item of newSale.products) {
+            await productCollection.updateOne(
+              { _id: new ObjectId(item.productId) },
+              { $inc: { stock: -item.quantity } },
+              { session }
+            );
+          }
+
+          res.send({
+            success: true,
+            saleId: saleResult.insertedId,
+            message: "Sale completed successfully and stock updated"
+          });
+        });
+      } catch (error) {
+        console.error("Error processing sale:", error);
+        res.status(500).send({
+          success: false,
+          message: error.message || "Failed to process sale",
+          error: error.message
+        });
+      } finally {
+        await session.endSession();
+      }
+    });
+
+// -------------------+++++------------------------------
+
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. Successfully Connected to MongoDB");
