@@ -93,7 +93,8 @@ async function run() {
       }
     });
 
-    // sale data here 
+    // SELLS SECTION 
+    // post sells data here 
     app.post("/sales", async (req, res) => {
       const session = client.startSession();
 
