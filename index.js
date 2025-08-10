@@ -147,8 +147,54 @@ async function run() {
       }
     });
 
-// -------------------+++++------------------------------
+    // Get all sales
+    app.get("/sales", async (req, res) => {
+      try {
+        const result = await salesCollection.find().sort({ saleDate: -1 }).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch sales", error });
+      }
+    });
 
+    // Get sales by user email
+    app.get("/sales/:userEmail", async (req, res) => {
+      try {
+        const userEmail = req.params.userEmail;
+        const result = await salesCollection
+          .find({ soldBy: userEmail })
+          .sort({ saleDate: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch sales", error });
+      }
+    });
+
+    // Get sales analytics/summary
+    app.get("/sales-summary/:userEmail", async (req, res) => {
+      try {
+        const userEmail = req.params.userEmail;
+        const sales = await salesCollection
+          .find({ soldBy: userEmail })
+          .toArray();
+        
+        const totalSales = sales.length;
+        const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+        const totalQuantitySold = sales.reduce((sum, sale) => 
+          sum + sale.products.reduce((pSum, product) => pSum + product.quantity, 0), 0
+        );
+        
+        res.send({
+          totalSales,
+          totalRevenue,
+          totalQuantitySold,
+          averageSaleValue: totalSales > 0 ? totalRevenue / totalSales : 0
+        });
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch sales summary", error });
+      }
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. Successfully Connected to MongoDB");
