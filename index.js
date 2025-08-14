@@ -27,6 +27,7 @@ async function run() {
     const userCollection = database.collection("user");
     const productCollection = database.collection("product");
     const salesCollection = database.collection("sales");
+    const employeeCollection = database.collection("employee");
 
     app.post("/users", async (req, res) => {
       try {
@@ -93,8 +94,8 @@ async function run() {
       }
     });
 
-    // SELLS SECTION 
-    // post sells data here 
+    // SELLS SECTION
+    // post sells data here
     app.post("/sales", async (req, res) => {
       const session = client.startSession();
 
@@ -114,12 +115,16 @@ async function run() {
             }
 
             if (product.stock < item.quantity) {
-              throw new Error(`Insufficient stock for ${item.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
+              throw new Error(
+                `Insufficient stock for ${item.name}. Available: ${product.stock}, Requested: ${item.quantity}`
+              );
             }
           }
 
           // Insert the sale
-          const saleResult = await salesCollection.insertOne(newSale, { session });
+          const saleResult = await salesCollection.insertOne(newSale, {
+            session,
+          });
 
           // Update product stock (decrease by sold quantity)
           for (const item of newSale.products) {
@@ -133,7 +138,7 @@ async function run() {
           res.send({
             success: true,
             saleId: saleResult.insertedId,
-            message: "Sale completed successfully and stock updated"
+            message: "Sale completed successfully and stock updated",
           });
         });
       } catch (error) {
@@ -141,7 +146,7 @@ async function run() {
         res.status(500).send({
           success: false,
           message: error.message || "Failed to process sale",
-          error: error.message
+          error: error.message,
         });
       } finally {
         await session.endSession();
@@ -151,7 +156,10 @@ async function run() {
     // Get all sales
     app.get("/sales", async (req, res) => {
       try {
-        const result = await salesCollection.find().sort({ saleDate: -1 }).toArray();
+        const result = await salesCollection
+          .find()
+          .sort({ saleDate: -1 })
+          .toArray();
         res.send(result);
       } catch (error) {
         res.status(500).send({ message: "Failed to fetch sales", error });
@@ -179,23 +187,106 @@ async function run() {
         const sales = await salesCollection
           .find({ soldBy: userEmail })
           .toArray();
-        
+
         const totalSales = sales.length;
         const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
-        const totalQuantitySold = sales.reduce((sum, sale) => 
-          sum + sale.products.reduce((pSum, product) => pSum + product.quantity, 0), 0
+        const totalQuantitySold = sales.reduce(
+          (sum, sale) =>
+            sum +
+            sale.products.reduce((pSum, product) => pSum + product.quantity, 0),
+          0
         );
-        
+
         res.send({
           totalSales,
           totalRevenue,
           totalQuantitySold,
-          averageSaleValue: totalSales > 0 ? totalRevenue / totalSales : 0
+          averageSaleValue: totalSales > 0 ? totalRevenue / totalSales : 0,
         });
       } catch (error) {
-        res.status(500).send({ message: "Failed to fetch sales summary", error });
+        res
+          .status(500)
+          .send({ message: "Failed to fetch sales summary", error });
       }
     });
+
+    // employee here
+
+    app.post("/employees", async (req, res) => {
+      try {
+        const newEmployee = req.body;
+        const result = await employeeCollection.insertOne(newEmployee);
+        res.send(result);
+      } catch (error) {
+        console.error("Error adding employee:", error);
+        res.status(500).send({ message: "Failed to add employee", error });
+      }
+    });
+
+    app.get("/employees/:userEmail", async (req, res) => {
+      try {
+        const userEmail = req.params.userEmail;
+        const result = await employeeCollection
+          .find({ managedBy: userEmail })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching employees:", error);
+        res.status(500).send({ message: "Failed to fetch employees", error });
+      }
+    });
+
+    // Update employee
+    app.put("/employees/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedData = req.body;
+
+        const result = await employeeCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedData }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "Employee not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Employee updated successfully",
+          result,
+        });
+      } catch (error) {
+        console.error("Error updating employee:", error);
+        res.status(500).send({ message: "Failed to update employee", error });
+      }
+    });
+
+    // Delete employee
+    app.delete("/employees/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        const result = await employeeCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Employee not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Employee deleted successfully",
+          result,
+        });
+      } catch (error) {
+        console.error("Error deleting employee:", error);
+        res.status(500).send({ message: "Failed to delete employee", error });
+      }
+    });
+
+    
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. Successfully Connected to MongoDB");
