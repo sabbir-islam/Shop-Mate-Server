@@ -28,6 +28,7 @@ async function run() {
     const productCollection = database.collection("product");
     const salesCollection = database.collection("sales");
     const employeeCollection = database.collection("employee");
+    const supplierCollection = database.collection("supplier");
 
     app.post("/users", async (req, res) => {
       try {
@@ -211,7 +212,6 @@ async function run() {
     });
 
     // employee here
-
     app.post("/employees", async (req, res) => {
       try {
         const newEmployee = req.body;
@@ -286,7 +286,96 @@ async function run() {
       }
     });
 
-    
+    // SUPPLIER Section
+    // Add new supplier
+    app.post("/suppliers", async (req, res) => {
+      try {
+        const newSupplier = req.body;
+
+        // Add current timestamp
+        if (!newSupplier.createdAt) {
+          newSupplier.createdAt = new Date().toISOString();
+        }
+
+        const result = await supplierCollection.insertOne(newSupplier);
+
+        res.send({
+          success: true,
+          insertedId: result.insertedId,
+          message: "Supplier added successfully",
+        });
+      } catch (error) {
+        console.error("Error adding supplier:", error);
+        res.status(500).send({ message: "Failed to add supplier", error });
+      }
+    });
+
+    // Get suppliers by user email (show only suppliers added by current user)
+    app.get("/suppliers/:userEmail", async (req, res) => {
+      try {
+        const userEmail = req.params.userEmail;
+        const result = await supplierCollection
+          .find({ createdBy: userEmail })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching suppliers:", error);
+        res.status(500).send({ message: "Failed to fetch suppliers", error });
+      }
+    });
+
+    // Update supplier
+    app.put("/suppliers/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedData = req.body;
+
+        // Add updated timestamp
+        updatedData.updatedAt = new Date().toISOString();
+
+        const result = await supplierCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedData }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "Supplier not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Supplier updated successfully",
+          result,
+        });
+      } catch (error) {
+        console.error("Error updating supplier:", error);
+        res.status(500).send({ message: "Failed to update supplier", error });
+      }
+    });
+
+    // Delete supplier
+    app.delete("/suppliers/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        const result = await supplierCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Supplier not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Supplier deleted successfully",
+          result,
+        });
+      } catch (error) {
+        console.error("Error deleting supplier:", error);
+        res.status(500).send({ message: "Failed to delete supplier", error });
+      }
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. Successfully Connected to MongoDB");
