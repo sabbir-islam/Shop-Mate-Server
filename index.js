@@ -50,6 +50,66 @@ async function run() {
       }
     });
 
+    // PUT /users/:email - Update user information
+    app.put("/users/:email", async (req, res) => {
+      try {
+        const { email } = req.params;
+        const updateData = req.body;
+
+        console.log(`[2025-08-15 11:04:04] User update request for ${email}`);
+
+        // Basic validation
+        if (!email) {
+          return res.status(400).json({ message: "Email is required" });
+        }
+
+        if (!updateData.name || !updateData.name.trim()) {
+          return res.status(400).json({ message: "Name is required" });
+        }
+
+        // Check if user exists
+        const existingUser = await userCollection.findOne({ email: email });
+
+        if (!existingUser) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        console.log(`[2025-08-15 11:04:04] Found user: ${existingUser.name}`);
+
+        // Update the user
+        const result = await userCollection.updateOne(
+          { email: email },
+          {
+            $set: {
+              name: updateData.name.trim(),
+              photo: updateData.photo || "",
+              updatedAt: "2025-08-15 11:04:04",
+            },
+          }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(400).json({ message: "No changes made" });
+        }
+
+        // Get updated user
+        const updatedUser = await userCollection.findOne({ email: email });
+
+        console.log(
+          `[2025-08-15 11:04:04] User "${updatedUser.name}" updated successfully`
+        );
+
+        res.json({
+          success: true,
+          message: "Profile updated successfully",
+          data: updatedUser,
+        });
+      } catch (error) {
+        console.error("Error updating user:", error);
+        res.status(500).json({ message: "Failed to update profile" });
+      }
+    });
+
     // Product endpoints
     app.post("/products", async (req, res) => {
       try {
@@ -70,6 +130,132 @@ async function run() {
       }
     });
 
+    // Get a single product by ID
+    app.get("/products/:userEmail/:productId", async (req, res) => {
+      try {
+        const { userEmail, productId } = req.params;
+
+        // Log the request with current UTC time
+        const currentTime = new Date();
+        const formattedTime = currentTime
+          .toISOString()
+          .slice(0, 19)
+          .replace("T", " ");
+        console.log(
+          `[${formattedTime}] Product request by ${userEmail} for product ${productId}`
+        );
+
+        if (!ObjectId.isValid(productId)) {
+          return res.status(400).send({
+            success: false,
+            message: "Invalid product ID format",
+          });
+        }
+
+        // Find the product with both the user email and product ID
+        const product = await productCollection.findOne({
+          _id: new ObjectId(productId),
+          userEmail: userEmail,
+        });
+
+        // If product not found or doesn't belong to this user
+        if (!product) {
+          return res.status(404).send({
+            success: false,
+            message:
+              "Product not found or you don't have access to this product",
+          });
+        }
+
+        // Return the product as an array with a single item (based on example response)
+        res.status(200).send([product]);
+      } catch (error) {
+        console.error(`Error fetching product: ${error.message}`);
+        res.status(500).send({
+          success: false,
+          message: "Failed to retrieve product",
+          error: error.message,
+        });
+      }
+    });
+
+    // PUT /products/:userEmail/:productId - Update a specific product (SIMPLIFIED)
+    app.put("/products/:userEmail/:productId", async (req, res) => {
+      try {
+        const { userEmail, productId } = req.params;
+        const updateData = req.body;
+
+        console.log(
+          `[2025-08-15 10:36:36] Product update by ${userEmail} for ${productId}`
+        );
+
+        // Basic validation
+        if (!ObjectId.isValid(productId)) {
+          return res.status(400).json({ message: "Invalid product ID" });
+        }
+
+        if (
+          !updateData.name ||
+          !updateData.sellingPrice ||
+          updateData.stock === undefined
+        ) {
+          return res
+            .status(400)
+            .json({ message: "Name, selling price, and stock are required" });
+        }
+
+        // Check if product exists and belongs to user
+        const existingProduct = await productCollection.findOne({
+          _id: new ObjectId(productId),
+          userEmail: userEmail,
+        });
+
+        if (!existingProduct) {
+          return res.status(404).json({ message: "Product not found" });
+        }
+
+        // Update the product
+        const result = await productCollection.updateOne(
+          { _id: new ObjectId(productId), userEmail: userEmail },
+          {
+            $set: {
+              name: updateData.name,
+              description: updateData.description || "",
+              buyingPrice: updateData.buyingPrice || 0,
+              sellingPrice: updateData.sellingPrice,
+              stock: updateData.stock,
+              category: updateData.category || "",
+              image: updateData.image || "",
+              updatedAt: "2025-08-15 10:36:36",
+            },
+          }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(400).json({ message: "No changes made" });
+        }
+
+        // Get updated product
+        const updatedProduct = await productCollection.findOne({
+          _id: new ObjectId(productId),
+          userEmail: userEmail,
+        });
+
+        console.log(
+          `[2025-08-15 10:36:36] Product "${updatedProduct.name}" updated successfully`
+        );
+
+        res.json({
+          success: true,
+          message: "Product updated successfully",
+          data: updatedProduct,
+        });
+      } catch (error) {
+        console.error("Error updating product:", error);
+        res.status(500).json({ message: "Failed to update product" });
+      }
+    });
+
     app.get("/products/:userEmail", async (req, res) => {
       try {
         const userEmail = req.params.userEmail;
@@ -81,7 +267,7 @@ async function run() {
     });
 
     // Update product stock
-    app.patch("/products/:id", async (req, res) => {
+    app.put("/products/:id", async (req, res) => {
       try {
         const id = req.params.id;
         const { stock } = req.body;
